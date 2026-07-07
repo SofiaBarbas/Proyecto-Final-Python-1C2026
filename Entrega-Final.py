@@ -4,122 +4,186 @@ from colorama import Fore, init
 #para inicilaizar colorama y que los colores se reinicien automáticamente después de cada print
 init(autoreset=True)
 
-def agregarProductos():
-    print("\n---Agregá Productos para Registrar---")
-    while True:
-        nombre = input("Nombre (Tocá Enter para terminar): ").strip()
-        if nombre == "": break
+
+def inicializarBaseDeDatos():
+    """Crea la base de datos 'inventario.db' y la tabla 'productos' """
+    try:
+        conexion = sqlite3.connect("inventario.db")
+        cursor = conexion.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS productos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                cantidad INTEGER NOT NULL,
+                precio REAL NOT NULL,
+                categoria TEXT
+            )
+        ''')
+        conexion.commit()
+        conexion.close()
+
+    #por si sucede un error con la base de datos
+    except sqlite3.Error as e: 
+        print(Fore.RED + f"Error al inicializar la base de datos: {e}")
+
+
+
+def verificar_si_hay_productos():
+    """Función auxiliar para reutilizar lógica de chequeo"""
+    conexion = sqlite3.connect("inventario.db")
+    cursor = conexion.cursor()
+    cursor.execute("SELECT count(*) FROM productos")
+    cantidad = cursor.fetchone()[0]
+    conexion.close()
+    return cantidad > 0
+
+
+
+def registrarProducto():
+    print(Fore.CYAN + "\n--- Registrar Nuevo Producto ---")
+    nombre = input("Nombre: ").strip()
+    descripcion = input("Descripción: ").strip()
+    try:
+        cantidad = int(input("Cantidad: "))
+        precio = float(input("Precio: "))
+        categoria = input("Categoría: ").strip()
         
-        categoria = input("Categoría (Tocá Enter para terminar): ").strip()
-        if categoria == "": break
+        if not nombre or cantidad < 0 or precio < 0:
+            print(Fore.RED + "Los datos son inválidos")
+            return
         
-        # para validar que el precio sea número
-        try:
-            precio = int(input("Precio (debe ser un numero entero): "))
-        except ValueError:
-            print("[ERROR] El precio debe ser un número entero\n")
-            continue
+        #si todo sale bien
+        conexion = sqlite3.connect("inventario.db")
+        cursor = conexion.cursor()
+        cursor.execute("INSERT INTO productos (nombre, descripcion, cantidad, precio, categoria) VALUES (?,?,?,?,?)", 
+                       (nombre, descripcion, cantidad, precio, categoria))
+        conexion.commit()
+        conexion.close()
+        print(Fore.GREEN + "Producto registrado con éxito")
 
-        # cada producto será un diccionario
-        unProducto = {
-            "nombre": nombre,
-            "categoria": categoria,
-            "precio": precio
-        }
-
-        #los productos totales serán una lista de diccionarios
-        productos.append(unProducto)
-
-        print(Fore.GREEN + f"Producto [{nombre}] agregado exitosamente\n")
+    except ValueError:
+        print(Fore.RED + "[ERROR] La cantidad y el precio deben ser números.")
 
 
-def mostrarProductos():
-    print("\n---Mostrando Productos Registrados---")
 
-    #si no hay productos, unicamente muestra mensaje
-    if not productos:
-        print(Fore.RED + "No hay productos para mostrar")
-        return None
-
-    for producto in productos:
-        indice = productos.index(producto)+1
-        print(Fore.GREEN + f"Producto {indice}:\n Nombre: {producto["nombre"]}\n Categoria: {producto['categoria']}\n Precio: {producto['precio']}")
+def listarProductos():
+    """Muestra todos los productos"""
+    print(Fore.CYAN + "\n--- Mostrando Inventario ---")
+    conexion = sqlite3.connect("inventario.db")
+    cursor = conexion.cursor()
+    cursor.execute("SELECT * FROM productos")
+    productos = cursor.fetchall()
     
+    ##si la lista está vacía
+    if not verificar_si_hay_productos():
+        print(Fore.RED + "No hay productos para mostrar")
+    else:
+        for producto in productos:
+            print(f"ID: {producto[0]}\n Nombre: {producto[1]}\n Cantidad: {producto[3]}\n Precio: ${producto[4]}\n Categoria: {producto[5]}\n")
+        conexion.close()
+
+
+
+def actualizarProducto():
+    """Actualiza cantidad o precio por ID"""
+    print(Fore.CYAN + "\n--- Actualizar Producto ---")
+    
+    if not verificar_si_hay_productos():
+        print(Fore.RED + "No hay productos para actualizar")
+        return
+    
+    idProducto = input("ID del producto a actualizar: ")
+    nuevaCantidad = int(input("Indique la nueva cantidad: "))
+    
+    conexion = sqlite3.connect("inventario.db")
+    cursor = conexion.cursor()
+    cursor.execute("UPDATE productos SET cantidad = ? WHERE id = ?", (nuevaCantidad, idProducto))
+    conexion.commit()
+    conexion.close()
+    print(Fore.GREEN + "Producto actualizado")
+
+
 
 def eliminarProducto():
-    print("\n---Eliminá Productos Registrados---")
+    """Elimina un producto por ID"""
+    print(Fore.CYAN + "\n--- Eliminar Producto ---")
+
+    if not verificar_si_hay_productos():
+        print(Fore.RED + "No hay productos para eliminar")
+        return
     
-    mostrarProductos()
-    if not productos:
-        return None
-    
-    while True:
-        try:
-            numero = int(input("Escribí el número del producto a eliminar: "))
-            if (1 <= numero <= len(productos)):
-                eliminado = productos.pop(numero - 1)
-                print(Fore.GREEN + f"Producto [{eliminado["nombre"]}] eliminado exitosamente")
-                break
-            else:
-                print(Fore.RED + "El número está fuera de rango.")
-        except ValueError:
-            print(Fore.RED + "El numero no es válido. Debe ser un entero.")
+    idProducto = input("ID del producto a eliminar: ")
+    confirmar = input(Fore.YELLOW + f"¿Confirmas eliminar el producto {idProducto}? (s/n): ")
+    if confirmar.lower() == 's':
+        conexion = sqlite3.connect("inventario.db")
+        cursor = conexion.cursor()
+        cursor.execute("DELETE FROM productos WHERE id = ?", (idProducto,))
+        conexion.commit()
+        conexion.close()
+        print(Fore.GREEN + "Producto eliminado")
+    else:
+        print(Fore.YELLOW + "Eliminación cancelada")
      
 
-def buscarProducto():
-    print("\n---Buscá Productos Registrados---")
+
+def reporteDeStock():
+    """Lista productos con stock bajo"""
+    print(Fore.CYAN + "\n---  Generar Reporte de Stock ---")
     
-    if not productos:
-        print(Fore.RED + "No hay productos para buscar")
-        return None
-    
-    nombre = input("Escribí el nombre del producto que querés buscar: ")
-    
-    productoEncontrado = None
-    for producto in productos:
-        if(producto["nombre"] == nombre):
-            productoEncontrado = producto
-            break
-    
-    if(productoEncontrado):
-        print(Fore.GREEN + f"El producto ha sido encontrado y es {productoEncontrado}")
+    limite = int(input("Busca productos con una Cantidad menor o igual a: "))
+    conexion = sqlite3.connect("inventario.db")
+    cursor = conexion.cursor()
+    cursor.execute("SELECT * FROM productos WHERE cantidad <= ?", (limite,))
+    resultados = cursor.fetchall()
+
+    if not resultados:
+        print(Fore.RED + "No hay productos con esa cantidad en stock")
     else:
-        print(Fore.RED + "El producto no existe")
+        print(Fore.GREEN + f"\nProductos con stock <= {limite}:")
+        for producto in resultados:
+            print(f"De {producto[1]} (ID: {producto[0]}) hay {producto[3]} unidades")
+        conexion.close()
+
 
 
 def calcularEleccion(eleccion):
     match(eleccion):
         case 1:
-            agregarProductos()
+            registrarProducto()
         case 2:
-            mostrarProductos()
+            listarProductos()
         case 3:
-            eliminarProducto()
+            actualizarProducto()
         case 4:
-            buscarProducto()
+            eliminarProducto()
         case 5:
-            print(Fore.GREEN + "Decidiste salir del programa")
+            reporteDeStock()
+        case 6:
+            print(Fore.CYAN + "\n--- Decidiste salir del programa ---")
         case _:
             print(Fore.RED + "Escribiste un valor no valido")
 
 
-#main()
-productos = []
-print("---Bienvenidos al Sistema de Gestión de Productos---")
+
+#cuerpom del main()
+inicializarBaseDeDatos()
+print(Fore.CYAN + "\n--- Bienvenidos al Sistema de Gestión de Inventario ---")
 while True:
-    print("\n---Menu---")
+    print(Fore.CYAN + "\n--- Menu ---")
     print("Elegí la opción que quieras realizar:")
-    print("1. Agregar productos")
-    print("2. Mostrar productos")
-    print("3. Eliminar productos")
-    print("4. Buscar producto")
-    print("5. Salir")
+    print("1. Registrar productos")
+    print("2. Listar productos")
+    print("3. Actualizar productos")
+    print("4. Eliminar un producto")
+    print("5. Generar reporte de stock")
+    print("6. Salir")
     try:
         eleccion = int(input("\nElijo la opción "))
     except ValueError:
         print(Fore.RED + "[ERROR] El valor ingresado no inválido. Por favor, ingresá un número del 1 al 5")
         continue
     calcularEleccion(eleccion)
-    if(eleccion == 5):
+    if(eleccion == 6):
         break
-print("Hasta la proxima\n")
+print(Fore.CYAN + "Hasta la proxima\n")
