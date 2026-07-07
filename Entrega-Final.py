@@ -29,7 +29,7 @@ def inicializarBaseDeDatos():
 
 
 
-def verificar_si_hay_productos():
+def verificarSiHayProductos():
     """Función auxiliar para reutilizar lógica de chequeo"""
     conexion = sqlite3.connect("inventario.db")
     cursor = conexion.cursor()
@@ -76,7 +76,7 @@ def listarProductos():
     productos = cursor.fetchall()
     
     ##si la lista está vacía
-    if not verificar_si_hay_productos():
+    if not verificarSiHayProductos():
         print(Fore.RED + "No hay productos para mostrar")
     else:
         for producto in productos:
@@ -89,7 +89,7 @@ def actualizarProducto():
     """Actualiza cantidad o precio por ID"""
     print(Fore.CYAN + "\n--- Actualizar Producto ---")
     
-    if not verificar_si_hay_productos():
+    if not verificarSiHayProductos():
         print(Fore.RED + "No hay productos para actualizar")
         return
     
@@ -109,7 +109,7 @@ def eliminarProducto():
     """Elimina un producto por ID"""
     print(Fore.CYAN + "\n--- Eliminar Producto ---")
 
-    if not verificar_si_hay_productos():
+    if not verificarSiHayProductos():
         print(Fore.RED + "No hay productos para eliminar")
         return
     
